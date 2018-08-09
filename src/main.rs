@@ -12,18 +12,14 @@ use std::io::Write;
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
 use std::char;
 
-const CSI: &str = "\x1B[";
-const DEFAULT_WIDTH: u32 = 80;
-const DEFAULT_HEIGHT: u32 = 20;
-
 use Direction::*;
 use Color::*;
 
 /// Maps the last direction and the current direction to an index in the pipe character array.
-const PRINT_MAP: [[usize; 4]; 4] = [        [0, 2, 0, 3],
-                                            [4, 1, 3, 1],
-                                            [0, 5, 0, 4],
-                                            [5, 1, 2, 1]];
+const PRINT_MAP: [[usize; 4]; 4] = [[0, 2, 0, 3],
+                                    [4, 1, 3, 1],
+                                    [0, 5, 0, 4],
+                                    [5, 1, 2, 1]];
 
 const COLORSETS: [[Color; 6]; 3] = [[White, Red, White, Yellow, Cyan, Magenta],
                                     [Cyan, Magenta, Blue, Yellow, Green, Red],
@@ -47,7 +43,7 @@ enum Color {
     Black   = 0u8,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(usize)]
 enum Direction {
     Up      = 0usize,
@@ -87,8 +83,8 @@ struct Pipe {
     pub rng: rand::StdRng,
     /// How much many squares this pipe should go before it changes direction
     pub track_len: u32,
-    /// Current color of the pipe
     pub color: Color,
+    /// Maximum allowed track length.
     pub max_track_len: u32,
     pub colorset: usize,
     pub charset: usize,
@@ -100,7 +96,7 @@ struct Pipe {
 impl Pipe {
     const DIRS: [Direction; 4] = [Up, Down, Left, Right];
     
-    pub fn new(colorset: usize, charset: usize, max_track_len: u32, cols: u32, rows: u32) -> Pipe {
+    pub fn new(colorset: usize, charset: usize, min_track_len: u32, max_track_len: u32, cols: u32, rows: u32) -> Pipe {
         let pos = Position::new(0, 0);
         let mut rng = rand::StdRng::new().unwrap();
         
@@ -109,7 +105,7 @@ impl Pipe {
         let last_dir = dir.clone();
 
         let mut pipe = Pipe {   pos, rng, dir, last_dir, track_len: 4, color: White, max_track_len,
-                                min_track_len: 4, rows, cols, charset, colorset };
+                                min_track_len, rows, cols, charset, colorset };
         pipe.reset();
         pipe
     }
@@ -133,6 +129,12 @@ impl Pipe {
             1 => self.pos.y = 0,
             _ => unreachable!()
         };
+
+        if r < 2 {
+            self.pos.x = self.rng.gen::<u32>() % self.cols;
+        } else {
+            self.pos.y = self.rng.gen::<u32>() % self.rows;
+        }
 
         self.set_track_len();
         self.set_random_color();
@@ -159,17 +161,27 @@ impl Pipe {
         if self.track_len == 0 {
             self.turn_pipe();
         } else {
+            if self.pos.x == 0 && self.dir == Direction::Left {
+                self.pos.x = self.cols;
+            } else if self.pos.x == self.cols && self.dir == Direction::Right {
+                self.pos.x = 0;
+            }
+            if self.pos.y == 0 && self.dir == Direction::Up {
+                self.pos.y = self.rows;
+            } else if self.pos.y == self.rows && self.dir == Direction::Down {
+                self.pos.y = 0;
+            }
+            /*if  self.pos.x <= 0 || self.pos.x >= self.cols ||
+                self.pos.y <= 0 || self.pos.y >= self.rows {
+                self.reset()
+            }*/
+
             match self.dir {
                 Up => self.pos.y -= 1,
                 Down => self.pos.y += 1,
                 Left => self.pos.x -= 1,
                 Right => self.pos.x += 1,
             };
-
-            if  self.pos.x <= 0 || self.pos.x >= self.cols ||
-                self.pos.y <= 0 || self.pos.y >= self.rows {
-                self.reset()
-            }
         }
     }
 
@@ -178,25 +190,19 @@ impl Pipe {
         let ch = CHARSETS[self.charset][ind];
         set_color(self.color, window);
         window.mvaddstr(self.pos.y as i32, self.pos.x as i32, ch);
-        // print!("{}", ch);
     }
 }
 
 fn clear_screen(window: &Window) {
     window.erase();
     doupdate();
-    // print!("{}H{}J", CSI, CSI);
 }
 
 fn move_cursor(pos: Position, window: &Window) {
     window.mv(pos.x as i32, pos.y as i32);
-    // print!("{}{};{}H", CSI, pos.y, pos.x);
-    // std::io::stdout().flush().ok();
 }
 fn set_color(color: Color, window: &Window) {
     window.color_set(color as u8 as i16);
-    // print!("{}{}m", CSI, color as u8);
-    // std::io::stdout().flush().ok();
 }
 
 fn safe_exit() -> ! {
@@ -311,11 +317,25 @@ fn main() {
         }
     };
 
+    if charset != 0 {
+        println!("There is only one charset right now.");
+        return;
+    }
    
     if min_len >= max_len {
         
         println!("\nMinimum length must be less than the maximum length ({} >= {})", min_len, max_len);
-        safe_exit();
+        return;
+    }
+
+    if colorset > 2 {
+        println!("There are only 3 supported color sets right now! Please specify a color set between 0 and 2.");
+        return;
+    }
+
+    if numpipes == 0 {
+        println!("No pipes?");
+        return
     }
 
     let window = initscr();
@@ -324,7 +344,7 @@ fn main() {
  
     let mut pipes = vec![];
     for _ in 0..numpipes {
-        pipes.push(Pipe::new(colorset, charset, max_len, width as u32, height as u32));
+        pipes.push(Pipe::new(colorset, charset, min_len, max_len, width as u32, height as u32));
     }
 
     clear_screen(&window);
