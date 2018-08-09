@@ -1,0 +1,11 @@
+[package]
+name = "rpipes"
+version = "0.1.0"
+authors = ["Joshua Karns <jkarns275@gmail.com>"]
+
+[dependencies]
+rand = "0.4"
+ctrlc = { version = "3.0", features = ["termination"] }
+clap = "2.32.0"
+terminal_size = "0.1.8"
+pancurses = { version = "0.16", features = ["wide"] }
