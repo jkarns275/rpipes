@@ -1,3 +1,8 @@
+# Requirements
+`rpipes` requires the ncursesw (wide-character supporting) development libraries to be installed.
+
+On Ubuntu this library can be installed using `sudo apt-get install libncursesw5-dev`
+
 # Usage
 
 ```
