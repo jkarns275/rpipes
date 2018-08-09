@@ -4,13 +4,9 @@ extern crate clap;
 extern crate pancurses;
 
 use pancurses::*;
-use clap::{ Arg, App, SubCommand };
+use clap::{Arg, App};
 
 use rand::Rng;
-
-use std::io::Write;
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
-use std::char;
 
 use Direction::*;
 use Color::*;
@@ -26,9 +22,6 @@ const COLORSETS: [[Color; 6]; 3] = [[White, Red, White, Yellow, Cyan, Magenta],
                                     [White, Blue, Cyan, Magenta, Green, White]];
 
 const CHARSETS: [[&'static str; 6]; 1] = [["┃", "━", "┏", "┓", "┛", "┗"]];
-const DEFAULT_CHARSET: usize = 1;
-const DEFAULT_N_PIPES: usize = 2;
-const DEFAULT_COLOR_MODE: usize = 0;
 
 #[derive(Copy, Clone)]
 #[repr(u8)]
@@ -40,7 +33,6 @@ enum Color {
     Yellow  = 3u8,
     Green   = 2u8,
     Red     = 1u8,
-    Black   = 0u8,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -145,13 +137,8 @@ impl Pipe {
     }
 
     pub fn turn_pipe(&mut self) {
-        let rb = self.rng.gen::<bool>();
         self.last_dir = self.dir;
-        self.dir = match self.dir {
-            Up | Down => if rb { Left } else { Right },
-            Left | Right => if rb { Up } else { Down }
-        };
-
+        self.dir = self.dir.turn(&mut self.rng);
         self.set_track_len();
     }
 
@@ -198,22 +185,15 @@ fn clear_screen(window: &Window) {
     doupdate();
 }
 
-fn move_cursor(pos: Position, window: &Window) {
-    window.mv(pos.x as i32, pos.y as i32);
-}
 fn set_color(color: Color, window: &Window) {
     window.color_set(color as u8 as i16);
-}
-
-fn safe_exit() -> ! {
-    endwin();
-    std::process::exit(0);
 }
 
 static mut READY_TO_EXIT: bool = false;
 
 fn main() {
-    ctrlc::set_handler(move || {
+    // This returns a result.
+    let _ = ctrlc::set_handler(move || {
         unsafe { READY_TO_EXIT = true };
     });
 
@@ -339,6 +319,7 @@ fn main() {
     }
 
     let window = initscr();
+    window.nodelay(true);
 
     let (height, width) = window.get_max_yx();
  
@@ -357,13 +338,17 @@ fn main() {
 
     use std::time::{Duration, Instant};
     while !unsafe { READY_TO_EXIT } {
+        match window.getch() {
+            Some(_) => break,
+            None => {},
+        };
         let now = Instant::now();
         pipes.iter_mut().map(|pipe| { pipe.update(); pipe.print(&window) }).count();
         window.refresh();
         let elapsed = now.elapsed();
         let ms = elapsed.as_secs() as u32 * 1000 + elapsed.subsec_millis();
 
-        if ms < delay { std::thread::sleep_ms(delay - ms); }
+        if ms < delay { std::thread::sleep(Duration::from_millis((delay - ms).into())); }
     }
 
     window.erase();
