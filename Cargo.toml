@@ -1,6 +1,6 @@
 [package]
 name = "rpipes"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Joshua Karns <jkarns275@gmail.com>"]
 description = "A 'terminal saver' program that prints pipes."
 license = "GPL-3.0-only"
