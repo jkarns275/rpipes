@@ -346,8 +346,7 @@ fn main() {
         pipes.iter_mut().map(|pipe| { pipe.update(); pipe.print(&window) }).count();
         window.refresh();
         let elapsed = now.elapsed();
-        let ms = elapsed.as_secs() as u32 * 1000 + elapsed.subsec_millis();
-
+        let ms = elapsed.as_secs() as u32 * 1000 + (elapsed.subsec_nanos() / 1000000) as u32;
         if ms < delay { std::thread::sleep(Duration::from_millis((delay - ms).into())); }
     }
 
